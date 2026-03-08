@@ -34,6 +34,130 @@ const renderFlash = (message?: string, type: "success" | "error" = "success") =>
   return `<div class="notice ${type}">${escapeHtml(message)}</div>`;
 };
 
+const renderAdminBatchUploadScript = () => `
+  <script>
+    (() => {
+      const form = document.querySelector("[data-batch-upload-form]");
+
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const input = form.querySelector('input[name="files"]');
+      const submitButton = form.querySelector("[data-upload-submit]");
+      const progress = form.querySelector("[data-upload-progress]");
+      const summary = form.querySelector("[data-upload-summary]");
+      const list = form.querySelector("[data-upload-list]");
+
+      if (
+        !(input instanceof HTMLInputElement) ||
+        !(submitButton instanceof HTMLButtonElement) ||
+        !(progress instanceof HTMLProgressElement) ||
+        !(summary instanceof HTMLDivElement) ||
+        !(list instanceof HTMLUListElement)
+      ) {
+        return;
+      }
+
+      const setSummary = (message, isError) => {
+        summary.hidden = false;
+        summary.className = "notice upload-summary " + (isError ? "error" : "success");
+        summary.textContent = message;
+      };
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const files = Array.from(input.files || []).filter((file) => file.size > 0);
+
+        if (files.length === 0) {
+          setSummary("请至少选择一个文件。", true);
+          return;
+        }
+
+        submitButton.disabled = true;
+        input.disabled = true;
+        progress.hidden = false;
+        progress.max = files.length;
+        progress.value = 0;
+        list.hidden = false;
+        list.innerHTML = "";
+
+        let successCount = 0;
+        let failedCount = 0;
+
+        setSummary("开始逐个上传文件，请不要关闭当前页面。", false);
+
+        for (const file of files) {
+          const item = document.createElement("li");
+          item.className = "upload-item running";
+          item.textContent = file.name + "：上传中...";
+          list.appendChild(item);
+
+          const formData = new FormData();
+          formData.append("file", file);
+
+          try {
+            const response = await fetch("/admin/certificates/import", {
+              method: "POST",
+              body: formData,
+              credentials: "same-origin",
+            });
+
+            if (response.status === 401) {
+              window.location.href =
+                "/admin?error=" + encodeURIComponent("登录状态已失效，请重新登录后再试。");
+              return;
+            }
+
+            const result = await response.json().catch(() => null);
+
+            if (!response.ok || !result || result.ok !== true) {
+              throw new Error(
+                result && typeof result.error === "string"
+                  ? result.error
+                  : "导入失败，请稍后重试。"
+              );
+            }
+
+            successCount += 1;
+            item.className = "upload-item success";
+            item.textContent = file.name + "：导入成功";
+          } catch (error) {
+            failedCount += 1;
+            item.className = "upload-item error";
+            item.textContent =
+              file.name +
+              "：" +
+              (error instanceof Error ? error.message : "导入失败，请稍后重试。");
+          }
+
+          progress.value = successCount + failedCount;
+        }
+
+        submitButton.disabled = false;
+        input.disabled = false;
+        form.reset();
+
+        if (failedCount === 0) {
+          window.location.href =
+            "/admin?message=" +
+            encodeURIComponent("批量导入完成，共成功导入 " + successCount + " 个文件。");
+          return;
+        }
+
+        setSummary(
+          "批量导入完成：成功 " +
+            successCount +
+            " 个，失败 " +
+            failedCount +
+            " 个。成功的文件已经入库，刷新页面即可看到最新列表；失败文件请按列表逐项处理后重试。",
+          true
+        );
+      });
+    })();
+  </script>
+`;
+
 const layout = (title: string, content: string) => `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -296,6 +420,46 @@ const layout = (title: string, content: string) => `<!doctype html>
         color: var(--muted);
         font-size: 13px;
         line-height: 1.7;
+      }
+
+      .upload-summary {
+        margin-top: 14px;
+      }
+
+      .upload-progress {
+        width: 100%;
+        height: 10px;
+      }
+
+      .upload-list {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+        max-height: 220px;
+        overflow: auto;
+      }
+
+      .upload-item {
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .upload-item.running {
+        color: var(--muted);
+      }
+
+      .upload-item.success {
+        color: var(--success);
+      }
+
+      .upload-item.error {
+        color: var(--danger);
+      }
+
+      button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
       }
 
       @media (max-width: 880px) {
@@ -576,14 +740,26 @@ export const renderAdminDashboardPage = ({
             </section>
             <section class="panel">
               <h2>批量导入</h2>
-              <p class="subtle">请先将文件命名为 <span class="muted">QQ号_姓名.pdf</span>，再一次性上传多个文件。</p>
-              <form method="post" action="/admin/certificates/batch" enctype="multipart/form-data" class="stack">
+              <p class="subtle">请先将文件命名为 <span class="muted">QQ号_姓名.pdf</span>。浏览器会逐个上传文件，避免把全部文件压成一个超大请求。</p>
+              <form
+                method="post"
+                action="/admin/certificates/batch"
+                enctype="multipart/form-data"
+                class="stack"
+                data-batch-upload-form
+              >
                 <label>
                   证书文件
                   <input type="file" name="files" multiple />
                 </label>
-                <button type="submit">开始批量导入</button>
+                <button type="submit" data-upload-submit>开始批量导入</button>
+                <progress class="upload-progress" value="0" max="0" hidden data-upload-progress></progress>
+                <div class="upload-summary" hidden data-upload-summary></div>
+                <ul class="upload-list" hidden data-upload-list></ul>
               </form>
+              <noscript>
+                <p class="hint">当前浏览器禁用 JavaScript 时，批量导入会退化为单次大请求，请分批上传并相应调整反向代理大小限制。</p>
+              </noscript>
               <p class="hint">示例：<span class="muted">123456789_张三.pdf</span>、<span class="muted">987654321_李四.jpg</span></p>
             </section>
           </div>
@@ -643,5 +819,6 @@ export const renderAdminDashboardPage = ({
           </section>
         </section>
       </main>
+      ${renderAdminBatchUploadScript()}
     `
   );

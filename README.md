@@ -105,6 +105,23 @@ docker compose down
 
 如果你准备对外正式提供服务，建议在服务器前面加 Nginx 或 Caddy，把 `80/443` 反向代理到容器的 `3000` 端口，并顺带处理 HTTPS。
 
+如果使用 Nginx，默认 `client_max_body_size` 很容易让文件上传直接报 `413 Request Entity Too Large`。当前后台批量导入已经改成浏览器逐个上传文件，因此这里的限制只需要覆盖“单个证书文件”的大小，而不是整批文件的总大小，例如：
+
+```nginx
+server {
+  client_max_body_size 20m;
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
 ## 后台上传说明
 
 手动新增时，直接填写 QQ 号、持有人昵称并上传文件即可。
@@ -116,7 +133,7 @@ docker compose down
 987654321_李四.jpg
 ```
 
-系统会自动解析文件名中的 QQ 号和姓名，并写入数据库。
+系统会自动解析文件名中的 QQ 号和姓名，并逐个上传写入数据库。这样即使一次选择很多文件，也不会把所有文件压成一个超大的请求体。
 
 ## 常用命令
 

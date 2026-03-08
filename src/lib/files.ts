@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, unlink } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 
 const UPLOAD_DIRECTORY = join(process.cwd(), "storage", "uploads");
@@ -21,9 +21,8 @@ export const saveUploadedFile = async (file: File) => {
   const relativePath = normalizeRelativePath(
     relative(process.cwd(), absolutePath)
   );
-  const buffer = Buffer.from(await file.arrayBuffer());
 
-  await writeFile(absolutePath, buffer);
+  await Bun.write(absolutePath, file);
 
   return {
     filePath: relativePath,

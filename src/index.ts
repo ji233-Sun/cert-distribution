@@ -65,6 +65,14 @@ const html = (content: string) =>
     },
   });
 
+const json = (payload: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+    },
+  });
+
 const getSearchValue = (request: Request, key: string) =>
   new URL(request.url).searchParams.get(key)?.trim() || undefined;
 
@@ -80,6 +88,46 @@ const cleanupExpiredCodes = async () => {
 
 const createVerificationCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
+
+const saveCertificateRecord = async ({
+  qqNumber,
+  ownerName,
+  certificateFile,
+}: {
+  qqNumber: string;
+  ownerName: string;
+  certificateFile: File;
+}) => {
+  const storedFile = await saveUploadedFile(certificateFile);
+
+  try {
+    return await prisma.certificate.create({
+      data: {
+        qqNumber,
+        ownerName,
+        filePath: storedFile.filePath,
+        originalFileName: storedFile.originalFileName,
+      },
+    });
+  } catch (error) {
+    await deleteStoredFile(storedFile.filePath);
+    throw error;
+  }
+};
+
+const importCertificateByFileName = async (certificateFile: File) => {
+  const parsed = parseBatchFileName(certificateFile.name);
+
+  if (!parsed) {
+    throw new Error("命名不符合 QQ号_姓名.扩展名 格式。");
+  }
+
+  return saveCertificateRecord({
+    qqNumber: parsed.qqNumber,
+    ownerName: parsed.ownerName,
+    certificateFile,
+  });
+};
 
 const getOwnedCertificate = async (request: Request, certificateId: string) => {
   const adminSession = getAdminSession(request.headers.get("cookie"));
@@ -397,20 +445,13 @@ export const app = new Elysia()
       return redirect(buildUrl("/admin", { error: "请上传证书文件。" }));
     }
 
-    const storedFile = await saveUploadedFile(certificateFile);
-
     try {
-      await prisma.certificate.create({
-        data: {
-          qqNumber,
-          ownerName,
-          filePath: storedFile.filePath,
-          originalFileName: storedFile.originalFileName,
-        },
+      await saveCertificateRecord({
+        qqNumber,
+        ownerName,
+        certificateFile,
       });
     } catch (error) {
-      await deleteStoredFile(storedFile.filePath);
-
       return redirect(
         buildUrl("/admin", {
           error:
@@ -422,6 +463,54 @@ export const app = new Elysia()
     }
 
     return redirect(buildUrl("/admin", { message: "证书已成功添加。" }));
+  })
+  .post("/admin/certificates/import", async ({ request }) => {
+    const adminSession = getAdminSession(request.headers.get("cookie"));
+
+    if (!adminSession) {
+      return json(
+        {
+          ok: false,
+          error: "请先登录管理员后台。",
+        },
+        401
+      );
+    }
+
+    const formData = await request.formData();
+    const certificateFile = formData.get("file");
+
+    if (!(certificateFile instanceof File) || certificateFile.size === 0) {
+      return json(
+        {
+          ok: false,
+          error: "请上传证书文件。",
+        },
+        400
+      );
+    }
+
+    try {
+      await importCertificateByFileName(certificateFile);
+
+      return json({
+        ok: true,
+        fileName: certificateFile.name,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "导入失败，请稍后重试。";
+      const status = message.includes("命名不符合") ? 400 : 500;
+
+      return json(
+        {
+          ok: false,
+          fileName: certificateFile.name,
+          error: message,
+        },
+        status
+      );
+    }
   })
   .post("/admin/certificates/batch", async ({ request }) => {
     const adminSession = getAdminSession(request.headers.get("cookie"));
@@ -443,38 +532,12 @@ export const app = new Elysia()
     const failedFiles: string[] = [];
 
     for (const file of files) {
-      const parsed = parseBatchFileName(file.name);
-
-      if (!parsed) {
-        failedFiles.push(`${file.name}（命名不符合 QQ号_姓名.扩展名 格式）`);
-        continue;
-      }
-
       try {
-        const storedFile = await saveUploadedFile(file);
-
-        try {
-          await prisma.certificate.create({
-            data: {
-              qqNumber: parsed.qqNumber,
-              ownerName: parsed.ownerName,
-              filePath: storedFile.filePath,
-              originalFileName: storedFile.originalFileName,
-            },
-          });
-
-          successCount += 1;
-        } catch (error) {
-          await deleteStoredFile(storedFile.filePath);
-          failedFiles.push(
-            `${file.name}（${
-              error instanceof Error ? error.message : "数据库写入失败"
-            }）`
-          );
-        }
+        await importCertificateByFileName(file);
+        successCount += 1;
       } catch (error) {
         failedFiles.push(
-          `${file.name}（${error instanceof Error ? error.message : "文件保存失败"}）`
+          `${file.name}（${error instanceof Error ? error.message : "导入失败"}）`
         );
       }
     }
