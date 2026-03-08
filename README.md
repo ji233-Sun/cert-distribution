@@ -122,6 +122,27 @@ server {
 }
 ```
 
+## GitHub Actions 自动发布 GHCR
+
+仓库已新增 [`.github/workflows/publish-ghcr.yml`](.github/workflows/publish-ghcr.yml)，会在以下场景自动构建并推送 Docker 镜像到 GitHub Container Registry：
+
+- 推送到 `main`
+- 推送匹配 `v*` 的标签，例如 `v1.0.0`
+- 在 GitHub Actions 页面手动触发
+
+镜像名会自动使用小写仓库路径，避免 GHCR 因大小写不合法而发布失败。常见标签如下：
+
+- `ghcr.io/<owner>/<repo>:latest`：默认分支最新镜像
+- `ghcr.io/<owner>/<repo>:main`：`main` 分支推送
+- `ghcr.io/<owner>/<repo>:v1.0.0`：版本标签推送
+- `ghcr.io/<owner>/<repo>:sha-<commit>`：提交级别可追溯标签
+
+使用前请确认：
+
+- 仓库或组织允许 GitHub Actions 使用 `GITHUB_TOKEN` 写入 Packages
+- 如果需要匿名拉取镜像，请在 GHCR 的包设置里把对应镜像设为 `public`
+- 服务器侧如果改为拉取 GHCR 镜像部署，需要先执行 `docker login ghcr.io`
+
 ## 后台上传说明
 
 手动新增时，直接填写 QQ 号、持有人昵称并上传文件即可。
