@@ -23,6 +23,13 @@ SMTP_USER="your-account@qq.com"
 SMTP_PASS="your-smtp-password"
 ```
 
+可选配置：
+
+```bash
+PORT="3000"
+HOST="0.0.0.0"
+```
+
 ## 启动步骤
 
 ```bash
@@ -37,6 +44,66 @@ bun run dev
 
 - 用户入口：`http://localhost:3000/`
 - 管理员入口：`http://localhost:3000/admin`
+
+## Docker 部署
+
+项目根目录已经提供以下文件：
+
+- `Dockerfile`
+- `compose.yml`
+- `docker-entrypoint.sh`
+
+推荐在服务器上直接使用 `docker compose` 部署。
+
+### 1. 准备环境变量
+
+```bash
+cp .env.example .env
+```
+
+然后编辑 `.env`，至少填好：
+
+- `ADMIN_PASSWORD`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+
+`compose.yml` 会在容器内强制使用 `DATABASE_URL="file:/app/data/app.db"`，并把 SQLite 数据库存到 Docker volume 中，不会污染代码目录。
+
+### 2. 启动服务
+
+```bash
+docker compose up -d --build
+```
+
+启动后访问：
+
+- 用户入口：`http://服务器IP:3000/`
+- 管理员入口：`http://服务器IP:3000/admin`
+
+### 3. 常用运维命令
+
+```bash
+docker compose ps
+docker compose logs -f app
+docker compose restart app
+docker compose up -d --build
+docker compose down
+```
+
+### 4. 持久化说明
+
+以下数据会自动持久化到 Docker volume：
+
+- SQLite 数据库：`/app/data/app.db`
+- 上传文件：`/app/storage/uploads`
+
+这意味着容器重建后，数据库和证书文件仍会保留。
+
+### 5. 反向代理建议
+
+如果你准备对外正式提供服务，建议在服务器前面加 Nginx 或 Caddy，把 `80/443` 反向代理到容器的 `3000` 端口，并顺带处理 HTTPS。
 
 ## 后台上传说明
 
