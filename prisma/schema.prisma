@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Certificate {
+  id               String   @id @default(uuid())
+  qqNumber         String
+  ownerName        String
+  filePath         String
+  originalFileName String?
+  createdAt        DateTime @default(now())
+
+  @@index([qqNumber])
+}
+
+model VerificationCode {
+  id        String   @id @default(uuid())
+  qqNumber  String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([qqNumber])
+  @@index([expiresAt])
+}
