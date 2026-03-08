@@ -1,0 +1,11 @@
+.ace-tool
+.env
+.env.local
+.git
+.gitignore
+generated
+node_modules
+prisma/*.db
+prisma/*.db-journal
+storage/uploads
+**/*.log

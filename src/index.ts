@@ -24,6 +24,7 @@ import {
   renderHomePage,
 } from "./lib/views";
 
+const host = process.env.HOST?.trim() || "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
 
 const buildUrl = (path: string, params?: Record<string, string | undefined>) => {
@@ -530,7 +531,10 @@ export const app = new Elysia()
   });
 
 if (import.meta.main) {
-  app.listen(port);
+  app.listen({
+    hostname: host,
+    port,
+  });
 
   console.log(
     `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

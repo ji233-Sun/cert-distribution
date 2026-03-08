@@ -2,9 +2,11 @@
   "name": "cert-distribution",
   "version": "1.0.50",
   "scripts": {
+    "start": "bun src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "prisma generate && bun run --watch src/index.ts",
     "prisma:generate": "prisma generate",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
   },

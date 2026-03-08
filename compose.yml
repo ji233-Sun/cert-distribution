@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cert-distribution
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      DATABASE_URL: "file:/app/data/app.db"
+    volumes:
+      - cert_distribution_data:/app/data
+      - cert_distribution_uploads:/app/storage/uploads
+
+volumes:
+  cert_distribution_data:
+  cert_distribution_uploads:
