@@ -1,0 +1,647 @@
+type CertificateView = {
+  id: string;
+  qqNumber: string;
+  ownerName: string;
+  filePath: string;
+  originalFileName?: string | null;
+  createdAt: Date;
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+const formatDate = (date: Date) =>
+  new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+
+const renderFlash = (message?: string, type: "success" | "error" = "success") => {
+  if (!message) {
+    return "";
+  }
+
+  return `<div class="notice ${type}">${escapeHtml(message)}</div>`;
+};
+
+const layout = (title: string, content: string) => `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8fafc;
+        --panel: #ffffff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --primary: #334155;
+        --primary-soft: #e2e8f0;
+        --danger: #b91c1c;
+        --danger-soft: #fee2e2;
+        --success: #166534;
+        --success-soft: #dcfce7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        min-height: 100vh;
+        padding: 32px 20px 56px;
+      }
+
+      .center {
+        min-height: calc(100vh - 88px);
+        display: grid;
+        place-items: center;
+      }
+
+      .card {
+        width: min(100%, 440px);
+        background: var(--panel);
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 24px;
+        padding: 32px;
+      }
+
+      .wide-card {
+        width: min(100%, 1120px);
+        background: var(--panel);
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 28px;
+        padding: 28px;
+      }
+
+      h1, h2, h3, p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      h2 {
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      p.subtle {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+        margin-top: 26px;
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      input,
+      button,
+      .button-link {
+        font: inherit;
+      }
+
+      input[type="text"],
+      input[type="password"],
+      input[type="file"] {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        padding: 12px 14px;
+        color: var(--text);
+      }
+
+      input:focus {
+        outline: 2px solid #cbd5e1;
+        outline-offset: 1px;
+      }
+
+      button,
+      .button-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: none;
+        border-radius: 14px;
+        background: var(--primary);
+        color: #fff;
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+      }
+
+      button.secondary,
+      .button-link.secondary {
+        background: var(--primary-soft);
+        color: var(--text);
+      }
+
+      button.danger {
+        background: #111827;
+      }
+
+      button:hover,
+      .button-link:hover {
+        opacity: 0.9;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .notice {
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .notice.success {
+        background: var(--success-soft);
+        color: var(--success);
+      }
+
+      .notice.error {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      .meta {
+        display: grid;
+        gap: 6px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 6px 12px;
+        background: #f1f5f9;
+        color: #334155;
+        font-size: 12px;
+        width: fit-content;
+      }
+
+      .grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 22px;
+        background: #fff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+
+      th,
+      td {
+        padding: 14px 10px;
+        text-align: left;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .empty {
+        padding: 28px 0 12px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .table-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .inline {
+        display: inline;
+      }
+
+      .hint {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      @media (max-width: 880px) {
+        .grid.two {
+          grid-template-columns: 1fr;
+        }
+
+        .wide-card,
+        .card {
+          padding: 22px;
+          border-radius: 22px;
+        }
+
+        .topbar {
+          align-items: flex-start;
+        }
+
+        table,
+        thead,
+        tbody,
+        th,
+        td,
+        tr {
+          display: block;
+        }
+
+        thead {
+          display: none;
+        }
+
+        tr {
+          border-bottom: 1px solid var(--line);
+          padding: 12px 0;
+        }
+
+        td {
+          border: none;
+          padding: 8px 0;
+        }
+
+        td::before {
+          content: attr(data-label);
+          display: block;
+          color: var(--muted);
+          font-size: 12px;
+          margin-bottom: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    ${content}
+  </body>
+</html>`;
+
+export const renderHomePage = ({
+  step = "qq",
+  qqNumber = "",
+  message,
+  error,
+}: {
+  step?: "qq" | "verify";
+  qqNumber?: string;
+  message?: string;
+  error?: string;
+}) =>
+  layout(
+    "证书查询登录",
+    `
+      <main class="shell center">
+        <section class="card">
+          <div class="pill">证书发放系统</div>
+          <h1 style="margin-top: 16px;">证书查询</h1>
+          <p class="subtle">输入 QQ 号获取邮箱验证码，验证通过后即可查看并下载属于您的证书文件。</p>
+          <div class="stack">
+            ${renderFlash(message, "success")}
+            ${renderFlash(error, "error")}
+            ${
+              step === "verify"
+                ? `
+                  <form method="post" action="/auth/verify" class="stack">
+                    <label>
+                      QQ 号
+                      <input type="text" name="qqNumber" value="${escapeHtml(qqNumber)}" readonly />
+                    </label>
+                    <label>
+                      验证码
+                      <input type="text" name="code" inputmode="numeric" maxlength="6" placeholder="请输入 6 位验证码" />
+                    </label>
+                    <div class="actions">
+                      <button type="submit">立即验证</button>
+                      <a class="button-link secondary" href="/">返回上一步</a>
+                    </div>
+                    <p class="hint">验证码会发送到 ${escapeHtml(
+                      qqNumber || "您的 QQ 邮箱"
+                    )}@qq.com，10 分钟内有效。</p>
+                  </form>
+                `
+                : `
+                  <form method="post" action="/auth/send-code" class="stack">
+                    <label>
+                      QQ 号
+                      <input type="text" name="qqNumber" inputmode="numeric" maxlength="12" placeholder="请输入您的 QQ 号" />
+                    </label>
+                    <div class="actions">
+                      <button type="submit">发送验证码</button>
+                      <a class="button-link secondary" href="/admin">管理员入口</a>
+                    </div>
+                    <p class="hint">系统会将验证码发送到对应的 QQ 邮箱，例如 <span class="muted">123456789@qq.com</span>。</p>
+                  </form>
+                `
+            }
+          </div>
+        </section>
+      </main>
+    `
+  );
+
+export const renderDashboardPage = ({
+  qqNumber,
+  certificates,
+  message,
+  error,
+}: {
+  qqNumber: string;
+  certificates: CertificateView[];
+  message?: string;
+  error?: string;
+}) =>
+  layout(
+    "我的证书",
+    `
+      <main class="shell">
+        <section class="wide-card">
+          <div class="topbar">
+            <div class="meta">
+              <div class="pill">已登录</div>
+              <h1>我的证书</h1>
+              <p class="subtle">当前 QQ 号：${escapeHtml(
+                qqNumber
+              )}。您可以在线查看或下载自己的证书文件。</p>
+            </div>
+            <form method="post" action="/logout">
+              <button type="submit" class="secondary">退出登录</button>
+            </form>
+          </div>
+          ${renderFlash(message, "success")}
+          ${renderFlash(error, "error")}
+          ${
+            certificates.length === 0
+              ? `<div class="empty">当前没有可领取的证书，请稍后再试或联系管理员。</div>`
+              : `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>证书归属人</th>
+                      <th>文件名称</th>
+                      <th>创建时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${certificates
+                      .map(
+                        (certificate) => `
+                          <tr>
+                            <td data-label="证书归属人">${escapeHtml(
+                              certificate.ownerName
+                            )}</td>
+                            <td data-label="文件名称">${escapeHtml(
+                              certificate.originalFileName || certificate.filePath
+                            )}</td>
+                            <td data-label="创建时间">${escapeHtml(
+                              formatDate(certificate.createdAt)
+                            )}</td>
+                            <td data-label="操作">
+                              <div class="table-actions">
+                                <a class="button-link secondary" target="_blank" href="/certificates/${escapeHtml(
+                                  certificate.id
+                                )}/download?mode=view">查看</a>
+                                <a class="button-link" href="/certificates/${escapeHtml(
+                                  certificate.id
+                                )}/download">下载</a>
+                              </div>
+                            </td>
+                          </tr>
+                        `
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              `
+          }
+        </section>
+      </main>
+    `
+  );
+
+export const renderAdminLoginPage = ({
+  message,
+  error,
+}: {
+  message?: string;
+  error?: string;
+}) =>
+  layout(
+    "管理员登录",
+    `
+      <main class="shell center">
+        <section class="card">
+          <div class="pill">隐藏入口</div>
+          <h1 style="margin-top: 16px;">管理员登录</h1>
+          <p class="subtle">输入管理员密码后可管理证书、上传文件和执行批量导入。</p>
+          <div class="stack">
+            ${renderFlash(message, "success")}
+            ${renderFlash(error, "error")}
+            <form method="post" action="/admin/login" class="stack">
+              <label>
+                管理员密码
+                <input type="password" name="password" placeholder="请输入管理员密码" />
+              </label>
+              <div class="actions">
+                <button type="submit">登录后台</button>
+                <a class="button-link secondary" href="/">返回首页</a>
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
+    `
+  );
+
+export const renderAdminDashboardPage = ({
+  certificates,
+  message,
+  error,
+}: {
+  certificates: CertificateView[];
+  message?: string;
+  error?: string;
+}) =>
+  layout(
+    "证书管理后台",
+    `
+      <main class="shell">
+        <section class="wide-card">
+          <div class="topbar">
+            <div class="meta">
+              <div class="pill">管理员后台</div>
+              <h1>证书管理</h1>
+              <p class="subtle">支持单个新增、批量导入、文件删除和下载校验。批量文件命名格式为 <span class="muted">QQ号_姓名.pdf</span>。</p>
+            </div>
+            <form method="post" action="/admin/logout">
+              <button type="submit" class="secondary">退出后台</button>
+            </form>
+          </div>
+          ${renderFlash(message, "success")}
+          ${renderFlash(error, "error")}
+          <div class="grid two" style="margin-top: 22px;">
+            <section class="panel">
+              <h2>手动新增证书</h2>
+              <p class="subtle">填写归属 QQ、持有人昵称，并上传对应文件。</p>
+              <form method="post" action="/admin/certificates" enctype="multipart/form-data" class="stack">
+                <label>
+                  QQ 号
+                  <input type="text" name="qqNumber" inputmode="numeric" maxlength="12" placeholder="例如 123456789" />
+                </label>
+                <label>
+                  持有人昵称
+                  <input type="text" name="ownerName" placeholder="例如 张三" />
+                </label>
+                <label>
+                  证书文件
+                  <input type="file" name="certificateFile" />
+                </label>
+                <button type="submit">保存证书</button>
+              </form>
+            </section>
+            <section class="panel">
+              <h2>批量导入</h2>
+              <p class="subtle">请先将文件命名为 <span class="muted">QQ号_姓名.pdf</span>，再一次性上传多个文件。</p>
+              <form method="post" action="/admin/certificates/batch" enctype="multipart/form-data" class="stack">
+                <label>
+                  证书文件
+                  <input type="file" name="files" multiple />
+                </label>
+                <button type="submit">开始批量导入</button>
+              </form>
+              <p class="hint">示例：<span class="muted">123456789_张三.pdf</span>、<span class="muted">987654321_李四.jpg</span></p>
+            </section>
+          </div>
+          <section class="panel" style="margin-top: 20px;">
+            <h2>证书列表</h2>
+            ${
+              certificates.length === 0
+                ? `<div class="empty">当前还没有证书记录。</div>`
+                : `
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>QQ 号</th>
+                        <th>持有人</th>
+                        <th>文件</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${certificates
+                        .map(
+                          (certificate) => `
+                            <tr>
+                              <td data-label="QQ 号">${escapeHtml(
+                                certificate.qqNumber
+                              )}</td>
+                              <td data-label="持有人">${escapeHtml(
+                                certificate.ownerName
+                              )}</td>
+                              <td data-label="文件">${escapeHtml(
+                                certificate.originalFileName || certificate.filePath
+                              )}</td>
+                              <td data-label="创建时间">${escapeHtml(
+                                formatDate(certificate.createdAt)
+                              )}</td>
+                              <td data-label="操作">
+                                <div class="table-actions">
+                                  <a class="button-link secondary" target="_blank" href="/certificates/${escapeHtml(
+                                    certificate.id
+                                  )}/download?mode=view">查看</a>
+                                  <form method="post" action="/admin/certificates/${escapeHtml(
+                                    certificate.id
+                                  )}/delete" class="inline">
+                                    <button type="submit" class="danger">删除</button>
+                                  </form>
+                                </div>
+                              </td>
+                            </tr>
+                          `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                `
+            }
+          </section>
+        </section>
+      </main>
+    `
+  );
