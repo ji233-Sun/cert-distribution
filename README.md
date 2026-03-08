@@ -1,4 +1,4 @@
-# cert-distribution
+# Cert Distribution
 
 基于 Bun + Elysia + Prisma + SQLite 的证书发放系统。
 
