@@ -1,7 +1,10 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Elysia } from "elysia";
-import { sendVerificationCodeEmail } from "./lib/email";
+import {
+  sendCertificateReminderEmail,
+  sendVerificationCodeEmail,
+} from "./lib/email";
 import {
   deleteStoredFile,
   isValidQQNumber,
@@ -88,6 +91,68 @@ const cleanupExpiredCodes = async () => {
 
 const createVerificationCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
+
+type ReminderRecipient = {
+  qqNumber: string;
+  ownerNames: string[];
+  certificateCount: number;
+};
+
+const buildReminderRecipients = (
+  certificates: Array<{ qqNumber: string; ownerName: string }>
+): ReminderRecipient[] => {
+  const recipientMap = new Map<
+    string,
+    {
+      ownerNames: Set<string>;
+      certificateCount: number;
+    }
+  >();
+
+  for (const certificate of certificates) {
+    const recipient =
+      recipientMap.get(certificate.qqNumber) ??
+      {
+        ownerNames: new Set<string>(),
+        certificateCount: 0,
+      };
+
+    if (certificate.ownerName) {
+      recipient.ownerNames.add(certificate.ownerName);
+    }
+
+    recipient.certificateCount += 1;
+    recipientMap.set(certificate.qqNumber, recipient);
+  }
+
+  return Array.from(recipientMap, ([qqNumber, recipient]) => ({
+    qqNumber,
+    ownerNames: Array.from(recipient.ownerNames),
+    certificateCount: recipient.certificateCount,
+  }));
+};
+
+const summarizeReminderFailures = (
+  failedRecipients: Array<{ qqNumber: string; reason: string }>
+) => {
+  if (failedRecipients.length === 0) {
+    return undefined;
+  }
+
+  const preview = failedRecipients
+    .slice(0, 3)
+    .map(
+      ({ qqNumber, reason }) =>
+        `${qqNumber}@qq.com（${reason.slice(0, 60)}${reason.length > 60 ? "..." : ""}）`
+    )
+    .join("；");
+
+  if (failedRecipients.length > 3) {
+    return `以下 ${failedRecipients.length} 个邮箱发送失败，其中包括：${preview}`;
+  }
+
+  return `发送失败：${preview}`;
+};
 
 const saveCertificateRecord = async ({
   qqNumber,
@@ -547,6 +612,48 @@ export const app = new Elysia()
         ? `批量导入完成，共成功导入 ${successCount} 个文件。`
         : `批量导入完成：成功 ${successCount} 个，失败 ${failedFiles.length} 个。`;
     const error = failedFiles.length > 0 ? failedFiles.join("；") : undefined;
+
+    return redirect(buildUrl("/admin", { message, error }));
+  })
+  .post("/admin/reminders/send-all", async ({ request }) => {
+    const adminSession = getAdminSession(request.headers.get("cookie"));
+
+    if (!adminSession) {
+      return redirect(buildUrl("/admin", { error: "请先登录管理员后台。" }));
+    }
+
+    const certificates = await prisma.certificate.findMany({
+      select: {
+        qqNumber: true,
+        ownerName: true,
+      },
+    });
+
+    if (certificates.length === 0) {
+      return redirect(buildUrl("/admin", { error: "当前没有可发送提醒的证书记录。" }));
+    }
+
+    const reminderRecipients = buildReminderRecipients(certificates);
+    let successCount = 0;
+    const failedRecipients: Array<{ qqNumber: string; reason: string }> = [];
+
+    for (const recipient of reminderRecipients) {
+      try {
+        await sendCertificateReminderEmail(recipient);
+        successCount += 1;
+      } catch (error) {
+        failedRecipients.push({
+          qqNumber: recipient.qqNumber,
+          reason: error instanceof Error ? error.message : "发送失败，请稍后重试。",
+        });
+      }
+    }
+
+    const message =
+      failedRecipients.length === 0
+        ? `领取提醒发送完成，共通知 ${successCount} 个 QQ 邮箱。`
+        : `领取提醒发送完成：成功 ${successCount} 个，失败 ${failedRecipients.length} 个。`;
+    const error = summarizeReminderFailures(failedRecipients);
 
     return redirect(buildUrl("/admin", { message, error }));
   })

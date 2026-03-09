@@ -700,8 +700,12 @@ export const renderAdminDashboardPage = ({
   certificates: CertificateView[];
   message?: string;
   error?: string;
-}) =>
-  layout(
+}) => {
+  const reminderRecipientCount = new Set(
+    certificates.map((certificate) => certificate.qqNumber)
+  ).size;
+
+  return layout(
     "证书管理后台",
     `
       <main class="shell">
@@ -718,6 +722,29 @@ export const renderAdminDashboardPage = ({
           </div>
           ${renderFlash(message, "success")}
           ${renderFlash(error, "error")}
+          <section class="panel" style="margin-top: 22px;">
+            <h2>领取提醒邮件</h2>
+            <p class="subtle">当前共有 ${escapeHtml(
+              String(certificates.length)
+            )} 份证书记录、${escapeHtml(
+              String(reminderRecipientCount)
+            )} 个 QQ 邮箱待通知。系统会按 QQ 号去重，每个邮箱只发送 1 封提醒邮件。</p>
+            ${
+              certificates.length === 0
+                ? `<p class="hint">暂无可提醒用户，请先录入证书后再发送邮件。</p>`
+                : `
+                  <form
+                    method="post"
+                    action="/admin/reminders/send-all"
+                    class="actions"
+                    onsubmit="return window.confirm('将向全部有证书记录的 QQ 邮箱发送领取提醒邮件，是否继续？');"
+                  >
+                    <button type="submit">向全部用户发送领取提醒</button>
+                  </form>
+                  <p class="hint">发送过程会逐个投递邮件，耗时取决于收件人数和 SMTP 服务响应速度。若部分发送失败，页面会展示失败数量和部分失败原因。</p>
+                `
+            }
+          </section>
           <div class="grid two" style="margin-top: 22px;">
             <section class="panel">
               <h2>手动新增证书</h2>
@@ -822,3 +849,4 @@ export const renderAdminDashboardPage = ({
       ${renderAdminBatchUploadScript()}
     `
   );
+};
