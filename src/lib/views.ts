@@ -7,6 +7,19 @@ type CertificateView = {
   createdAt: Date;
 };
 
+const DISPLAY_TIME_ZONE = "Asia/Shanghai";
+
+const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  timeZone: DISPLAY_TIME_ZONE,
+});
+
 const escapeHtml = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -15,16 +28,7 @@ const escapeHtml = (value: string) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
-const formatDate = (date: Date) =>
-  new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date);
+const formatDate = (date: Date) => dateTimeFormatter.format(date);
 
 const renderFlash = (message?: string, type: "success" | "error" = "success") => {
   if (!message) {
