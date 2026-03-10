@@ -18,6 +18,16 @@ model Certificate {
   @@index([qqNumber])
 }
 
+model CertificateTracking {
+  id             String   @id @default(uuid())
+  qqNumber       String
+  ownerName      String
+  trackingNumber String
+  createdAt      DateTime @default(now())
+
+  @@index([qqNumber])
+}
+
 model VerificationCode {
   id        String   @id @default(uuid())
   qqNumber  String

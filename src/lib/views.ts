@@ -7,6 +7,14 @@ type CertificateView = {
   createdAt: Date;
 };
 
+type TrackingView = {
+  id: string;
+  qqNumber: string;
+  ownerName: string;
+  trackingNumber: string;
+  createdAt: Date;
+};
+
 const DISPLAY_TIME_ZONE = "Asia/Shanghai";
 
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -537,7 +545,7 @@ export const renderHomePage = ({
         <section class="card">
           <div class="pill">证书发放系统</div>
           <h1 style="margin-top: 16px;">证书查询</h1>
-          <p class="subtle">输入 QQ 号获取邮箱验证码，验证通过后即可查看并下载属于您的证书文件。</p>
+          <p class="subtle">输入 QQ 号获取邮箱验证码，验证通过后即可查看证书文件并查询快递单号。</p>
           <div class="stack">
             ${renderFlash(message, "success")}
             ${renderFlash(error, "error")}
@@ -585,11 +593,13 @@ export const renderHomePage = ({
 export const renderDashboardPage = ({
   qqNumber,
   certificates,
+  trackings,
   message,
   error,
 }: {
   qqNumber: string;
   certificates: CertificateView[];
+  trackings: TrackingView[];
   message?: string;
   error?: string;
 }) =>
@@ -604,7 +614,7 @@ export const renderDashboardPage = ({
               <h1>我的证书</h1>
               <p class="subtle">当前 QQ 号：${escapeHtml(
                 qqNumber
-              )}。您可以在线查看或下载自己的证书文件。</p>
+              )}。您可以在线查看证书文件并查询快递单号。</p>
             </div>
             <form method="post" action="/logout">
               <button type="submit" class="secondary">退出登录</button>
@@ -612,51 +622,96 @@ export const renderDashboardPage = ({
           </div>
           ${renderFlash(message, "success")}
           ${renderFlash(error, "error")}
-          ${
-            certificates.length === 0
-              ? `<div class="empty">当前没有可领取的证书，请稍后再试或联系管理员。</div>`
-              : `
-                <table>
-                  <thead>
-                    <tr>
-                      <th>证书归属人</th>
-                      <th>文件名称</th>
-                      <th>创建时间</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${certificates
-                      .map(
-                        (certificate) => `
-                          <tr>
-                            <td data-label="证书归属人">${escapeHtml(
-                              certificate.ownerName
-                            )}</td>
-                            <td data-label="文件名称">${escapeHtml(
-                              certificate.originalFileName || certificate.filePath
-                            )}</td>
-                            <td data-label="创建时间">${escapeHtml(
-                              formatDate(certificate.createdAt)
-                            )}</td>
-                            <td data-label="操作">
-                              <div class="table-actions">
-                                <a class="button-link secondary" target="_blank" href="/certificates/${escapeHtml(
-                                  certificate.id
-                                )}/download?mode=view">查看</a>
-                                <a class="button-link" href="/certificates/${escapeHtml(
-                                  certificate.id
-                                )}/download">下载</a>
-                              </div>
-                            </td>
-                          </tr>
-                        `
-                      )
-                      .join("")}
-                  </tbody>
-                </table>
-              `
-          }
+          <div class="stack">
+            <section class="panel">
+              <h2>证书文件</h2>
+              <p class="subtle">您可以在线查看或下载自己的证书文件。</p>
+              ${
+                certificates.length === 0
+                  ? `<div class="empty">当前没有可领取的证书，请稍后再试或联系管理员。</div>`
+                  : `
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>证书归属人</th>
+                          <th>文件名称</th>
+                          <th>创建时间</th>
+                          <th>操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${certificates
+                          .map(
+                            (certificate) => `
+                              <tr>
+                                <td data-label="证书归属人">${escapeHtml(
+                                  certificate.ownerName
+                                )}</td>
+                                <td data-label="文件名称">${escapeHtml(
+                                  certificate.originalFileName ||
+                                    certificate.filePath
+                                )}</td>
+                                <td data-label="创建时间">${escapeHtml(
+                                  formatDate(certificate.createdAt)
+                                )}</td>
+                                <td data-label="操作">
+                                  <div class="table-actions">
+                                    <a class="button-link secondary" target="_blank" href="/certificates/${escapeHtml(
+                                      certificate.id
+                                    )}/download?mode=view">查看</a>
+                                    <a class="button-link" href="/certificates/${escapeHtml(
+                                      certificate.id
+                                    )}/download">下载</a>
+                                  </div>
+                                </td>
+                              </tr>
+                            `
+                          )
+                          .join("")}
+                      </tbody>
+                    </table>
+                  `
+              }
+            </section>
+            <section class="panel">
+              <h2>快递单号</h2>
+              <p class="subtle">管理员上传的证书快递单号会显示在这里。</p>
+              ${
+                trackings.length === 0
+                  ? `<div class="empty">当前没有可查询的快递单号记录。</div>`
+                  : `
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>昵称</th>
+                          <th>快递单号</th>
+                          <th>创建时间</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${trackings
+                          .map(
+                            (tracking) => `
+                              <tr>
+                                <td data-label="昵称">${escapeHtml(
+                                  tracking.ownerName
+                                )}</td>
+                                <td data-label="快递单号">${escapeHtml(
+                                  tracking.trackingNumber
+                                )}</td>
+                                <td data-label="创建时间">${escapeHtml(
+                                  formatDate(tracking.createdAt)
+                                )}</td>
+                              </tr>
+                            `
+                          )
+                          .join("")}
+                      </tbody>
+                    </table>
+                  `
+              }
+            </section>
+          </div>
         </section>
       </main>
     `
@@ -676,7 +731,7 @@ export const renderAdminLoginPage = ({
         <section class="card">
           <div class="pill">隐藏入口</div>
           <h1 style="margin-top: 16px;">管理员登录</h1>
-          <p class="subtle">输入管理员密码后可管理证书、上传文件和执行批量导入。</p>
+          <p class="subtle">输入管理员密码后可管理证书、导入快递单号并执行批量导入。</p>
           <div class="stack">
             ${renderFlash(message, "success")}
             ${renderFlash(error, "error")}
@@ -698,10 +753,12 @@ export const renderAdminLoginPage = ({
 
 export const renderAdminDashboardPage = ({
   certificates,
+  trackings,
   message,
   error,
 }: {
   certificates: CertificateView[];
+  trackings: TrackingView[];
   message?: string;
   error?: string;
 }) => {
@@ -718,7 +775,7 @@ export const renderAdminDashboardPage = ({
             <div class="meta">
               <div class="pill">管理员后台</div>
               <h1>证书管理</h1>
-              <p class="subtle">支持单个新增、批量导入、文件删除和下载校验。批量文件命名格式为 <span class="muted">QQ号_姓名.pdf</span>。</p>
+              <p class="subtle">支持证书上传、批量导入、文件删除和下载校验。快递单号请在下方 CSV 模块导入。批量文件命名格式为 <span class="muted">QQ号_姓名.pdf</span>。</p>
             </div>
             <form method="post" action="/admin/logout">
               <button type="submit" class="secondary">退出后台</button>
@@ -839,6 +896,59 @@ export const renderAdminDashboardPage = ({
                                   </form>
                                 </div>
                               </td>
+                            </tr>
+                          `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                `
+            }
+          </section>
+          <section class="panel" style="margin-top: 20px;">
+            <h2>快递单号导入</h2>
+            <p class="subtle">上传 CSV 批量导入。格式：QQ号,昵称,快递单号。首行可为表头。</p>
+            <form method="post" action="/admin/trackings/import" enctype="multipart/form-data" class="stack">
+              <label>
+                CSV 文件
+                <input type="file" name="trackingFile" accept=".csv,text/csv" />
+              </label>
+              <button type="submit">上传快递单号</button>
+            </form>
+            <p class="hint">示例：<span class="muted">123456789,张三,SF123456789CN</span></p>
+          </section>
+          <section class="panel" style="margin-top: 20px;">
+            <h2>快递单号列表</h2>
+            ${
+              trackings.length === 0
+                ? `<div class="empty">当前还没有快递单号记录。</div>`
+                : `
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>QQ 号</th>
+                        <th>昵称</th>
+                        <th>快递单号</th>
+                        <th>创建时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${trackings
+                        .map(
+                          (tracking) => `
+                            <tr>
+                              <td data-label="QQ 号">${escapeHtml(
+                                tracking.qqNumber
+                              )}</td>
+                              <td data-label="昵称">${escapeHtml(
+                                tracking.ownerName
+                              )}</td>
+                              <td data-label="快递单号">${escapeHtml(
+                                tracking.trackingNumber
+                              )}</td>
+                              <td data-label="创建时间">${escapeHtml(
+                                formatDate(tracking.createdAt)
+                              )}</td>
                             </tr>
                           `
                         )

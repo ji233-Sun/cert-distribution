@@ -92,6 +92,170 @@ const cleanupExpiredCodes = async () => {
 const createVerificationCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
+type TrackingRecord = {
+  qqNumber: string;
+  ownerName: string;
+  trackingNumber: string;
+};
+
+const parseCsvRows = (content: string) => {
+  const input = content.replace(/^\uFEFF/, "");
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  const pushField = () => {
+    row.push(field);
+    field = "";
+  };
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+
+    if (inQuotes) {
+      if (char === "\"") {
+        if (input[index + 1] === "\"") {
+          field += "\"";
+          index += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inQuotes = true;
+      continue;
+    }
+
+    if (char === ",") {
+      pushField();
+      continue;
+    }
+
+    if (char === "\n") {
+      pushField();
+      rows.push(row);
+      row = [];
+      continue;
+    }
+
+    if (char === "\r") {
+      pushField();
+      rows.push(row);
+      row = [];
+      if (input[index + 1] === "\n") {
+        index += 1;
+      }
+      continue;
+    }
+
+    field += char;
+  }
+
+  pushField();
+  rows.push(row);
+
+  return rows;
+};
+
+const isTrackingHeaderRow = (row: string[]) => {
+  const firstCell = row[0]?.trim() ?? "";
+
+  if (isValidQQNumber(firstCell)) {
+    return false;
+  }
+
+  const joined = row.join("").toLowerCase();
+
+  return (
+    joined.includes("qq") ||
+    joined.includes("昵称") ||
+    joined.includes("姓名") ||
+    joined.includes("快递") ||
+    joined.includes("单号") ||
+    joined.includes("运单") ||
+    joined.includes("tracking")
+  );
+};
+
+const formatTrackingErrors = (errors: string[]) => {
+  const preview = errors.slice(0, 4).join("；");
+
+  if (errors.length > 4) {
+    return `导入失败：${preview} 等 ${errors.length} 条问题。`;
+  }
+
+  return `导入失败：${preview}`;
+};
+
+const parseTrackingCsv = (content: string) => {
+  const rows = parseCsvRows(content);
+  const errors: string[] = [];
+  const records: TrackingRecord[] = [];
+  let headerChecked = false;
+
+  rows.forEach((rawRow, index) => {
+    const row = rawRow.map((cell) => cell.trim());
+
+    if (row.every((cell) => cell === "")) {
+      return;
+    }
+
+    if (!headerChecked) {
+      headerChecked = true;
+      if (isTrackingHeaderRow(row)) {
+        return;
+      }
+    }
+
+    if (row.length < 3) {
+      errors.push(`第 ${index + 1} 行列数不足，需要 QQ 号、昵称、快递单号。`);
+      return;
+    }
+
+    const [qqNumber, ownerName, trackingNumber] = row;
+    const rowIssues: string[] = [];
+
+    if (!isValidQQNumber(qqNumber)) {
+      rowIssues.push("QQ 号无效");
+    }
+
+    if (!ownerName) {
+      rowIssues.push("昵称为空");
+    }
+
+    if (!trackingNumber) {
+      rowIssues.push("快递单号为空");
+    }
+
+    if (rowIssues.length > 0) {
+      errors.push(`第 ${index + 1} 行${rowIssues.join("，")}`);
+      return;
+    }
+
+    records.push({
+      qqNumber,
+      ownerName,
+      trackingNumber,
+    });
+  });
+
+  if (records.length === 0) {
+    errors.push("未解析到任何有效记录");
+  }
+
+  if (errors.length > 0) {
+    throw new Error(formatTrackingErrors(errors));
+  }
+
+  return records;
+};
+
 type ReminderRecipient = {
   qqNumber: string;
   ownerNames: string[];
@@ -393,11 +557,20 @@ export const app = new Elysia()
         createdAt: "desc",
       },
     });
+    const trackings = await prisma.certificateTracking.findMany({
+      where: {
+        qqNumber: userSession.qqNumber,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
     return html(
       renderDashboardPage({
         qqNumber: userSession.qqNumber,
         certificates,
+        trackings,
         message: getSearchValue(request, "message"),
         error: getSearchValue(request, "error"),
       })
@@ -451,10 +624,16 @@ export const app = new Elysia()
         createdAt: "desc",
       },
     });
+    const trackings = await prisma.certificateTracking.findMany({
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
     return html(
       renderAdminDashboardPage({
         certificates,
+        trackings,
         message,
         error,
       })
@@ -614,6 +793,58 @@ export const app = new Elysia()
     const error = failedFiles.length > 0 ? failedFiles.join("；") : undefined;
 
     return redirect(buildUrl("/admin", { message, error }));
+  })
+  .post("/admin/trackings/import", async ({ request }) => {
+    const adminSession = getAdminSession(request.headers.get("cookie"));
+
+    if (!adminSession) {
+      return redirect(buildUrl("/admin", { error: "请先登录管理员后台。" }));
+    }
+
+    const formData = await request.formData();
+    const trackingFile = formData.get("trackingFile");
+
+    if (!(trackingFile instanceof File) || trackingFile.size === 0) {
+      return redirect(
+        buildUrl("/admin", { error: "请上传包含快递单号的 CSV 文件。" })
+      );
+    }
+
+    let records: TrackingRecord[];
+
+    try {
+      records = parseTrackingCsv(await trackingFile.text());
+    } catch (error) {
+      return redirect(
+        buildUrl("/admin", {
+          error:
+            error instanceof Error
+              ? error.message
+              : "解析 CSV 失败，请稍后重试。",
+        })
+      );
+    }
+
+    try {
+      const result = await prisma.certificateTracking.createMany({
+        data: records,
+      });
+
+      return redirect(
+        buildUrl("/admin", {
+          message: `快递单号导入完成，共写入 ${result.count} 条记录。`,
+        })
+      );
+    } catch (error) {
+      return redirect(
+        buildUrl("/admin", {
+          error:
+            error instanceof Error
+              ? error.message
+              : "保存快递单号失败，请稍后重试。",
+        })
+      );
+    }
   })
   .post("/admin/reminders/send-all", async ({ request }) => {
     const adminSession = getAdminSession(request.headers.get("cookie"));
