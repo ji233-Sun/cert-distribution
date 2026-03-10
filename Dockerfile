@@ -7,7 +7,7 @@ ENV DATABASE_URL="file:/app/data/app.db"
 COPY package.json bun.lock tsconfig.json prisma.config.ts ./
 COPY prisma ./prisma
 
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --registry https://registry.npmmirror.com
 RUN bun run prisma:generate
 
 COPY src ./src
